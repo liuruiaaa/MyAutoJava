@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>人脸识别Demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+    <div id="app" class="face-verify-approve-index">
+<!--
+        <div class="loading-wrap" v-if="loading">
+            <div class="loading">
+                <p>对比中。。。</p>
+            </div>
+        </div>
+-->
+        <section class="all-header1-index">
+            <div class="page">
+                <p class="title" v-if="currentTaskId">{{notFaceText}}</p>
+                <div class="video-page">
+                    <van-circle v-model="currentRate" size="232" :stroke-width="30" :rate="rate" :color="gradientColor"
+                        layer-color="#F1F1F6" class="circle-container">
+                        <video class="video" id="video" width="232" height="232" playsinline autoplay muted  webkit-playsinline="true"
+                            x5-video-player-type="h5"></video>
+                    </van-circle>
+                    <!-- 检测结果 -->
+                    <p class="text" v-if="notFace">{{ notFaceText }}</p>
+                </div>
+                <img id="capturedImage" style="display:none"  width="300px" >
+            </div>
+        </section>
+    </div>
+    
+    <script src="./js/vue.min.js"></script>
+    <script src="./js/face-api3.js"></script>
+    <script>
+        var vue = new Vue({
+            el: "#app",
+            data: {
+                currentRate: 0,
+                rate: 100,
+                gradientColor: {
+                    "0%": "#95B8FA",
+                    "100%": "#3B80FF",
+                },
+                timer: null,
+                currentTaskId: null,
+                selectedTasks: [],
+                notFace: false,
+                notFaceText: "",
+                tasks: [
+                    //1左右摇头 2点头 3眨眼 5张口 6扭头 { id: 3, type: false }  
+                    { id: 1, type: false },
+                    { id: 2, type: false },
+                ],
+                turns: [
+                    {  type: "left"  , info:"向左扭头" },
+                    {  type: "right" , info:"向右扭头" },
+                ],
+                turnType:[],
+                tasks4: { id: 4, type: false },
+                stillTimer: null,
+                stillTimeThreshold: 3000, // 3秒
+                timerTime: 1000,        // 检查评率的的时钟
+                cos: null,             // COS实例
+                isShowDialog: false,   //人脸认证结果弹框
+                type: 3,               //认证失败弹框是否可以重新认证 1，不可以 2，可以 ，3，认证成功 4，显示去认证弹框
+                countdownTimer: null,  // 用于倒计时的计时器
+                loading: false,
+                nodCounter: 0,         // 点头计数器
+                nodThreshold: 2,       // 点头动作的阈值
+                isStill: false,        // 是否保持不动
+                shakeCounter: 0,       // 摇头计数器
+                shakeThreshold: 2,     // 摇头动作的阈值
+                eyeCounter: 0,         // 眨眼计数器
+                eyeThreshold: 2,       // 眨眼动作的阈值
+                isStillshake: false,   // 摇头是否保持不动1
+                nodlastPitch: 0,       // 上一次的点头头部倾斜角度
+                shakelastPitch: 0,     // 上一次的摇头头部倾斜角度
+                lastLeftEyePitch: 0,   // 上一次的左眼的闭程度
+                lastRightEyePitch: 0,  // 上一次的右眼的闭程度
+                imageUrl: "",          // 图片base64的URL
+                videoStream: null,
+                isMouthOpenStep:1,         //开闭口的步骤  
+                lastCalculateYawX: 0,      //摇晃横向检测temp
+                lastCalculatePitchY: 0,    //摇晃纵向检测temp
+                movementIsCheck: 5,        //检测在禁止的时候，有没有晃动 这是晃动值 当晃动值小于比较值(eyeCheckRange)的时候 (理论上没问题，但是不代表图片的时候有误差) 后台可调
+                shakeCheckRange: 3 ,       //摇头计灵敏度修改(越小越容易过) 5 就比较好  后台可调
+                nodCheckRange: 3     ,     //点头计灵敏度修改(越小越容易过) 5 就比较好  后台可调
+                eyeCheckRange: 0.2   ,     //眨眼计灵敏度修改(越小越容易过) 0 就比较好  后台可调
+                mouthCloseHightRange:6,    //闭口灵敏度修改(10左右要比开口的小)   6 就比较好  后台可调
+                mouthOpenHightRange:20,    //开口灵敏度修改(10左右要比闭口口的大) 10 就比较好  后台可调
+                turningLeftRange:60,       //扭头灵敏度修改(越小越容易过) 45 就比较好  后台可调 60也可的
+
+            },
+
+            methods: {
+                startTasks() {
+                    this.turnType = this.shuffleArray(this.turns).slice(0, 1); //摇一个方向
+                    // 随机选择两个任务
+                    // this.selectedTasks = this.shuffleArray(this.tasks).slice(0, 1);
+                    // this.selectedTasks.unshift({ id: 5, type: false })
+                    this.selectedTasks = [{ id: 5, type: false },{ id: 6, type: false }]     //1左右摇头 2点头 3眨眼 5张口 6扭头 
+                    this.completeTask();
+                },
+                shuffleArray(array) {
+                    // 随机打乱数组顺序
+                    for (let i = array.length - 1; i > 0; i--) {
+                        const j = Math.floor(Math.random() * (i + 1));
+                        [array[i], array[j]] = [array[j], array[i]];
+                    }
+                    return array;
+                },
+                // Main start 在循环中实时捕获
+                completeTask() {
+                    if (!this.timer) {
+                        this.startCamera()
+                            .then(() => {
+                                this.timer = window.setInterval(this.detectFace, this.timerTime);
+                            })
+                            .catch((err) => {
+                                console.log("startCamera函数报错了", err);
+                            });
+                    }
+                    //下面是检测是否通过了，没有通过就数  currentTaskId  ，数到谁就是谁
+                    const allTasksCompleted = this.selectedTasks.every((task) => task.type == null);
+                    // console.log("完成了所有的任务：", allTasksCompleted)
+                    //检测是否全部通过
+                    if (allTasksCompleted) {
+                        //随机两项全部通过,开始最后静止不动3s
+                        this.currentTaskId = 4;
+                        if (this.timer) {
+                            clearInterval(this.timer);
+                            this.timer = null; // Add this line to set timer to null
+                        }
+                        console.log("检测完毕了！");
+                    } else {
+                        //没有通过就数 currentTaskId
+                        if (!this.selectedTasks[0].type) {
+                            this.currentTaskId = this.selectedTasks[0].id;
+                        } else if (!this.selectedTasks[1].type) {
+                            this.currentTaskId = this.selectedTasks[1].id;
+                        } else if (!this.selectedTasks[2].type) {
+                            this.currentTaskId = this.selectedTasks[2].id;
+                        } else {
+                            //全部通过后跳出循环
+                            this.currentTaskId = null;
+                            if (this.timer) {
+                                clearInterval(this.timer);
+                                this.timer = null;  // Add this line to set timer to null
+                            }
+                            // break;
+                        }
+                    }
+                    // }while(true)
+                },
+                // Main do 在循环中实时捕获
+                async detectFace() {
+                    const video = document.getElementById("video");
+                    if (!video) {
+                        return; // 视频元素不存在，直接返回，避免报错
+                    }
+
+                    var param = new faceapi.TinyFaceDetectorOptions({ inputSize: 128 })
+                    //console.log('param',video,param)
+                    const detections = await faceapi
+                        .detectSingleFace(video,param )
+                        .withFaceLandmarks();
+                    // const detections = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions()).withFaceLandmarks();
+                    //console.log('detections',detections)
+                    if (detections) {
+                        // 如果检测到人脸
+                        this.notFace = false; // 重置未检测到人脸的标志
+                        this.notFaceText = ""; // 清空提示文本
+                        if (this.currentTaskId) {
+                            // 如果当前有任务正在进行
+                            if (this.currentTaskId === 1) {
+                                this.shakeHeadfunc(detections);
+                            } else if (this.currentTaskId === 2) {
+                                this.nodHeadfunc(detections);
+                            } else if (this.currentTaskId === 3) {
+                                this.winkfunc(detections);
+                            } else if (this.currentTaskId === 5) {
+                                this.monthfunc(detections);
+                            } else if (this.currentTaskId === 6) {
+                                this.twistHead(detections);
+                            } else if (this.currentTaskId === 4) {
+                                // 静止不动任务  三秒之后执行 captureStillImage() 方法
+                                console.log("请保持不动，3秒后截屏！");
+                                this.notFaceText = "请保持不动，3秒后截屏！"
+                                if (!this.stillTimer) {
+                                    this.stillTimer = setTimeout(() => {
+                                        this.stillTimer = null;
+                                        this.captureStillImage();
+                                    }, this.stillTimeThreshold);
+                                }
+                                if (!this.countdownTimer) {
+                                    this.countdownTimer = setTimeout(() => {
+                                        this.currentTaskId = null; // 完成所有任务，重置当前任务
+                                        this.countdownTimer = null; // 清除计时器
+                                    }, this.stillTimeThreshold);
+                                }
+                            }
+                        } else {
+                            // 没有任务正在进行，进行下一个任务
+                            this.completeTask();
+                        }
+                    } else {
+                        // 没有检测到人脸
+                        this.notFace = true;
+                        this.notFaceText = "没有检测到人脸!";
+                    }
+                },
+                //1、循环任务摇头中的处理
+                shakeHeadfunc(detections) {
+                    console.log("摇头");
+                    this.notFaceText = "摇头检测中。。"
+                    if (detections) {
+                        const landmarks = detections.landmarks;
+                        const leftEye = landmarks.getLeftEye();
+                        const rightEye = landmarks.getRightEye();
+                        const pitch = this.calculateYaw(leftEye, rightEye);
+                        // 判断用户是否摇头
+                        if (Math.abs(pitch - this.shakelastPitch) < 1) {
+                            console.log("摇头检测用户保持不动");
+                            this.notFaceText = "摇头检测用户保持不动"
+                        } else {
+                            if (this.isShaking(pitch)) {
+                                this.shakeCounter++;
+                                if (this.shakeCounter >= this.shakeThreshold) {
+                                    this.shakeCounter = 0;
+                                    this.notFace = false;
+                                    this.notFaceText = "摇头检测成成功！"
+                                    this.selectedTasks = this.selectedTasks.filter((task) => task.id !== this.currentTaskId);
+                                }
+                            } else {
+                                this.shakeCounter = 0;
+                                this.notFace = true;
+                                this.notFaceText = "摇头检测失败 请继续";
+                            }
+                        }
+                        console.log(this.notFaceText);
+                        setTimeout(() => {
+                            this.completeTask();
+                        }, this.timerTime);
+                        this.shakelastPitch = pitch;
+                    }
+                },
+                //2、循环点头中的处理
+                nodHeadfunc(detections) {
+                    console.log("点头");
+                    this.notFaceText = "点头检测中。。"
+                    if (detections) {
+                        const landmarks = detections.landmarks;
+                        // const nose = landmarks.getNose();
+                        const leftEye = landmarks.getLeftEye();
+                        const rightEye = landmarks.getRightEye();
+                        // 计算头部倾斜角度
+                        const pitch = this.calculatePitch(leftEye, rightEye);
+                        // 判断点头动作
+                        if (Math.abs(pitch - this.nodlastPitch) < 1) {
+                            console.log("用户保持不动");
+                            this.notFaceText = "点头检测用户保持不动"
+                        } else {
+                            if (this.isNodding(pitch)) {
+                                this.nodCounter++;
+                                if (this.nodCounter >= this.nodThreshold) {
+                                    this.nodCounter = 0;
+                                    this.notFace = false;
+                                    this.notFaceText = "点头检测成功！";
+                                    this.selectedTasks = this.selectedTasks.filter((task) => task.id !== this.currentTaskId);
+                                }
+                            } else {
+                                this.nodCounter = 0;
+                                this.notFace = true;
+                                this.notFaceText = "点头检测失败 请继续";
+                            }
+                        }
+                        console.log(this.notFaceText);
+                        setTimeout(() => {
+                            this.completeTask();
+                        }, this.timerTime);
+                        this.nodlastPitch = pitch;
+                    }
+                },
+                //3、眨眼中的处理   
+                winkfunc(detections) {
+                    console.log("眨眼");
+                    this.notFaceText = "眨眼检测中。。"
+                    if (detections) {
+                        const landmarks = detections.landmarks;
+                        const leftEye = landmarks.getLeftEye();
+                        const rightEye = landmarks.getRightEye();
+                        // 计算左眼和右眼的闭合程度
+                        const leftEyeOpenness = this.calculateEyeOpenness(leftEye);
+                        const rightEyeOpenness = this.calculateEyeOpenness(rightEye);
+                        console.log("眨眼的程度：left:"+leftEyeOpenness+ " leftHistory:"+(this.lastLeftEyePitch) +" right:"+rightEyeOpenness+  " rightHistory:"+(this.lastRightEyePitch));
+                        // 判断是否眨眼（根据闭合程度）  用现在的大于刚才的，说明眼睛睁大了,也说明他刚才闭了眼睛
+                        const isBlinking = leftEyeOpenness > (this.lastLeftEyePitch+this.eyeCheckRange) && rightEyeOpenness > (this.lastRightEyePitch+this.eyeCheckRange) ; //范围可根据实际情况调整
+                        
+                        //摇头计算方法
+                        const calculateYawX   = this.calculateYaw(leftEye, rightEye);
+                        //点头计算方法
+                        const calculatePitchY = this.calculatePitch(leftEye, rightEye);
+                        //摇晃检测
+                        if(Math.abs(this.lastCalculateYawX-calculateYawX) < this.movementIsCheck && 
+                           Math.abs(this.lastCalculatePitchY-calculatePitchY) < this.movementIsCheck){
+                            if (isBlinking ) {
+                                    this.eyeCounter++
+                            if (this.eyeCounter >= this.eyeThreshold) {
+                                this.notFace = false;
+                                this.notFaceText = "眨眼检测成功！";
+                                //删除任务数组对应项
+                                this.selectedTasks = this.selectedTasks.filter((task) => task.id !== this.currentTaskId);
+                            }
+                            } else {
+                                this.notFace = true;
+                                this.notFaceText = "眨眼检测失败 请继续";
+                            }
+                        }else{
+                            this.notFace = true;
+                            this.notFaceText = "眨眼检测请保持不动！";
+                        }
+
+
+                        console.log(this.notFaceText);
+                        setTimeout(() => {
+                            this.completeTask();
+                        }, this.timerTime);
+                        this.lastLeftEyePitch  = leftEyeOpenness;
+                        this.lastRightEyePitch = rightEyeOpenness;
+                        this.lastCalculateYawX   = calculateYawX;
+                        this.lastCalculatePitchY = calculatePitchY;
+
+                    }
+                },
+                 //5、张口闭口的处理 
+                monthfunc(detections){
+                   
+                    if(this.isMouthOpenStep==1){
+                        console.log("闭口");
+                        this.notFaceText = "打开闭上检测中。。"
+                    }else if(this.isMouthOpenStep==2){
+                        console.log("开口");
+                        this.notFaceText = "打开嘴巴检测中。。"
+                    }
+                    if (detections) {
+                        const landmarks = detections.landmarks;
+                        const mouth    = landmarks.getMouth();
+                        const leftEye  = landmarks.getLeftEye();
+                        const rightEye = landmarks.getRightEye();
+                        //摇头计算方法
+                        const calculateYawX   = this.calculateYaw(leftEye, rightEye);
+                        //点头计算方法
+                        const calculatePitchY = this.calculatePitch(leftEye, rightEye);
+                        console.log(mouth,"mouth")
+                        //摇晃检测
+                        if(Math.abs(this.lastCalculateYawX-calculateYawX) < this.movementIsCheck && 
+                           Math.abs(this.lastCalculatePitchY-calculatePitchY) < this.movementIsCheck){
+                            //第一步
+                            if(this.isMouthOpenStep==1){
+                                
+                                // 检测张闭口 
+                                const closeHight = this.calculateMouthHight(mouth)
+                                if( closeHight < this.mouthCloseHightRange ){
+                                    this.isMouthOpenStep = 2;
+                                    this.notFaceText = "闭口检测成功！";
+                                }else{
+                                    this.notFaceText = "闭口检测失败！";
+                                }
+                            //第二步
+                            }else if(this.isMouthOpenStep == 2){
+                                
+                                const openHight = this.calculateMouthHight(mouth)
+                                if( openHight > this.mouthOpenHightRange ){
+                                    this.isMouthOpenStep = 3;
+                                    this.notFaceText = "打开嘴巴检测成功！";
+                                    //删除任务数组对应项
+                                    this.selectedTasks = this.selectedTasks.filter((task) => task.id !== this.currentTaskId);
+                                }else{
+                                    this.notFaceText = "打开嘴巴检测失败！";
+                                }
+                            }
+                        }else{
+                            this.notFace = true;
+                            this.notFaceText = "开闭口检测请保持不动！";
+                        }
+                        setTimeout(() => {
+                            this.completeTask();
+                        }, this.timerTime);
+                    }
+                },
+                calculateMouthHight(mouth){
+                    const topLip    = mouth[13].y;    //就是第14个
+                    const bottomLip = mouth[17].y;    //就是第17个 
+                    const mouthOpen = Math.abs(bottomLip - topLip) ; // 这个数值可以根据需要调整，小于这个数值认为是闭口，大于这个数值认为是张口
+                    return mouthOpen;
+                },
+                //扭头
+                twistHead(detections){
+                    if (detections) {
+                        console.log(this.turnType[0].info);
+                        this.notFaceText = this.turnType[0].info+"检测中。。"
+                        const landmarks = detections.landmarks;
+
+                        const nose     = landmarks.getNose()
+                        const leftEye  = landmarks.getLeftEye();
+                        const rightEye = landmarks.getRightEye();
+
+                        console.log(nose,"nose" );
+                        console.log(leftEye,"leftEye" );
+                        console.log(rightEye,"rightEye" );
+                        const isleft =  this.isTurningLeft(nose,leftEye,rightEye,this.turnType[0].type);
+                        if(isleft){
+                            this.notFaceText = this.turnType[0].info+"检测成功！";
+                            //删除任务数组对应项
+                            this.selectedTasks = this.selectedTasks.filter((task) => task.id !== this.currentTaskId);
+                        }else{
+                            this.notFaceText = this.turnType[0].info+"检测失败！";
+                        }
+                        console.log(isleft,"isleft" );
+                    }
+                    setTimeout(() => {
+                        this.completeTask();
+                    }, this.timerTime);
+                },
+                //判断是不是向左转头  鼻子第3个 左眼第1个 右眼第4个
+                isTurningLeft(nose, leftEye, rightEye,direction) {
+                    // 获取鼻尖到左眼的水平距离 
+                    const distanceNoseToLeftEye = nose[2].x - leftEye[0].x;
+                    // 获取鼻尖到右眼的水平距离
+                    const distanceNoseToRightEye = rightEye[3].x - nose[2].x;
+                    // 设定一个阈值（threshold）来辨识转头动作
+                    const threshold = this.turningLeftRange; // 该值需要根据实际情况来调整
+                    // 判断是否向左转头
+                    // 如果鼻尖到左眼的距离相对较短，则认为用户向左转头
+                    console.log(distanceNoseToRightEye,"distanceNoseToRightEye" );
+                    console.log(distanceNoseToLeftEye,"distanceNoseToLeftEye" );
+                    
+                    if("left" == direction){
+                        //左右是反着的，应该是 distanceNoseToRightEye - distanceNoseToLeftEye
+                        if (    (distanceNoseToLeftEye - distanceNoseToRightEye) > threshold) {
+                            return true;
+                        } else {
+                            return false;
+                        }
+                    }else if("right" == direction){
+                        if (    (distanceNoseToRightEye - distanceNoseToLeftEye) > threshold) {
+                            return true;
+                        } else {
+                            return false;
+                        }
+                    }
+
+
+                },
+                // 在 async 函数中初始化摄像头和 face-api.js 只执行一次
+                async startCamera() {
+                    // try {
+                    //     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    //     this.videoStream = stream; // 保存视频流，以便在组件销毁时停止摄像头
+                    //     this.$refs.videoElement.srcObject = stream;
+                    //     console.log(this.$refs.videoElement.srcObject);
+                    // } catch (error) {
+                    //     console.error("Error starting camera:", error);
+                    // }
+                    this.getAudio(); //先解决兼容问题
+                    // 初始化 face-api.js 模型
+                    try {
+                        await Promise.all([
+                            faceapi.nets.tinyFaceDetector.loadFromUri("models"),
+                            faceapi.nets.faceLandmark68Net.loadFromUri("models"),
+                            //faceapi.nets.ssdMobilenetv1.loadFromUri('/models'),
+                            //=====    
+                            // faceapi.nets.faceRecognitionNet.loadFromUri('/models'),
+                            // faceapi.nets.faceExpressionNet.loadFromUri('/models'),
+                            // faceapi.nets.ssdMobilenetv1.loadFromUri('/models')
+
+                        ]).then(function(){
+                            console.log("模型加载成功！！");
+                        });
+                    } catch (error) {
+                        //throw new Error('模型加载失败！！'+error);
+                        console.error("模型加载失败！！", error);
+                    }
+                },
+                // 兼容问题 关于navigator.mediaDevices.getUserMedia兼容问题
+                // 有一部分老的浏览器不能兼容navigator.mediaDevices.getUserMedia来获取麦克风和摄像头，可用如下来获取
+                getAudio() {
+                    if (
+                        navigator.mediaDevices.getUserMedia ||
+                        navigator.getUserMedia ||
+                        navigator.webkitGetUserMedia ||
+                        navigator.mozGetUserMedia
+                    ) {
+                        this.getUserMediaFun(  //{ video: true } 开始是这样的  调用用户媒体设备，访问摄像头、录音
+                            { audio: false, video: { width: { min: 1024, ideal: 1280 }, height: { min: 776, ideal: 720 } } }
+                        ); // 现在是要摄像头
+                    } else {
+                        console.log("你的浏览器不支持访问用户媒体设备");
+                    }
+                },
+                //解决兼容问题1
+                getUserMediaFun(constrains) {
+                    let that = this;
+                    if (navigator.mediaDevices.getUserMedia) {
+                        // 最新标准API
+                        navigator.mediaDevices
+                            .getUserMedia(constrains)
+                            .then((stream) => {
+                                that.success(stream);
+                            })
+                            .catch((err) => {
+                                that.error(err,1);
+                            });
+                    } else if (navigator.webkitGetUserMedia || navigator.mozGetUserMedia) {
+                        // webkit内核浏览器
+                        if (navigator.mediaDevices === undefined) {
+                            navigator.mediaDevices = {};
+                        }
+                        // 一些浏览器部分支持 mediaDevices。我们不能直接给对象设置 getUserMedia
+                        // 因为这样可能会覆盖已有的属性。这里我们只会在没有getUserMedia属性的时候添加它。
+                        if (navigator.mediaDevices.getUserMedia === undefined) {
+                            navigator.mediaDevices.getUserMedia = function (constraints) {
+                                // 首先，如果有getUserMedia的话，就获得它
+                                var getUserMedia = navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
+                                // 一些浏览器根本没实现它 - 那么就返回一个error到promise的reject来保持一个统一的接口
+                                if (!getUserMedia) {
+                                    return Promise.reject(new Error("getUserMedia is not implemented in this browser"));
+                                }
+                                // 否则，为老的navigator.getUserMedia方法包裹一个Promise
+                                return new Promise(function (resolve, reject) {
+                                    getUserMedia.call(navigator, constraints, resolve, reject);
+                                });
+                            };
+                        }
+                        navigator.mediaDevices
+                            .getUserMedia(constrains)
+                            .then((stream) => {
+                                that.success(stream);
+                            })
+                            .catch((err) => {
+                                that.error(err,2);
+                            });
+                    } else if (navigator.getUserMedia) {
+                        // 旧版API
+                        navigator
+                            .getUserMedia(constrains)
+                            .then((stream) => {
+                                that.success(stream);
+                            })
+                            .catch((err) => {
+                                that.error(err,3);
+                            });
+                    }
+                },
+
+                //判断摇头动作
+                isShaking(pitch) {
+                    console.log("判断摇头动作角度：", pitch);
+                    const mediumRange = { min: -this.shakeCheckRange, max: this.shakeCheckRange }; // 范围可根据实际情况调整
+                    return pitch <= mediumRange.min || pitch >= mediumRange.max;
+                },
+                //判断点头动作
+                isNodding(pitch) { 
+                     console.log("判断点头动作角度：", pitch);
+                    // 在这里判断点头动作
+                    // 根据头部倾斜角度进行判断
+                    // 返回 true 或 false
+                    const mediumRange = { min: -this.nodCheckRange, max: this.nodCheckRange }; // 范围可根据实际情况调整
+                    return pitch <= mediumRange.min || pitch >= mediumRange.max;
+                },
+                //眨眼计算方法
+                calculateEyeOpenness(eyeLandmarks) {
+                    console.log("判断眨眼动作角度：", eyeLandmarks);
+                    // 计算眼睛的闭合程度
+                    const eyeTop    = eyeLandmarks[1].y; //第二个数据 最小 应该是眼睛底部
+                    const eyeBottom = eyeLandmarks[4].y; //第五个数据 最大 应该是眼睛顶部
+                    const eyeHeight = eyeBottom - eyeTop;
+                     console.log(eyeHeight, "eyeHeight");
+                    const eyeOpenness = eyeHeight ; // 范围可根据实际情况调整 除以3是为了兼容普通人的眼睛
+                    return eyeOpenness;
+                },
+                //计算摇头的方法
+                calculateYaw(leftEye, rightEye) {
+                    const deltaX = rightEye[3].x - leftEye[0].x;
+                    const deltaY = rightEye[3].y - leftEye[0].y;
+                    const angle = Math.atan2(deltaY, deltaX) * (180 / Math.PI);
+                    return angle;
+                },
+                //点头计算方法
+                calculatePitch(leftEye, rightEye) {
+                    // 在这里计算头部倾斜角度
+                    const leftEyeCenter = {
+                        x: (leftEye[0].x + leftEye[3].x) / 2,
+                        y: (leftEye[0].y + leftEye[3].y) / 2,
+                    };
+                    const rightEyeCenter = {
+                        x: (rightEye[0].x + rightEye[3].x) / 2,
+                        y: (rightEye[0].y + rightEye[3].y) / 2,
+                    };
+
+                    const deltaX = rightEyeCenter.x - leftEyeCenter.x;
+                    const deltaY = rightEyeCenter.y - leftEyeCenter.y;
+                    const radians = Math.atan2(deltaY, deltaX);
+                    // 将弧度转换为角度
+                    const degrees = radians * (180 / Math.PI);
+                    return degrees;
+                },
+
+                // 保存当前帧作为图像
+                async captureStillImage() {
+                    if (!this.imageUrl) {
+                        const video = document.getElementById("video");
+                        const canvas = document.createElement("canvas");
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        const context = canvas.getContext("2d");
+                        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const imgDataUrl = canvas.toDataURL("image/jpeg");//DataURL实际上就是一个Base64编码的字符串
+                        document.getElementById("capturedImage").style.display = "block";
+                        document.getElementById("capturedImage").src = imgDataUrl;
+                        console.log("捕获的图像数据URL：", imgDataUrl);
+                        // 现在你可以将imgDataUrl用作捕获的静态图像。
+                        // console.log("捕获的图像数据URL：", imgDataUrl);
+                        // 如果需要，你还可以在界面上显示捕获的图像。
+                        // 例如，你可以创建一个<img>元素，并将其src属性设置为imgDataUrl。
+                    }
+                },
+
+                // 成功的回调函数
+                success(stream) {
+                    const videoElement = document.getElementById("video"); // 获取视频元素
+                    this.videoStream = stream; // 保存视频流，以便在组件销毁时停止摄像头
+                    videoElement.srcObject = stream;
+                    console.log("访问用户媒体设备成功！");
+                },
+                // 异常的回调函数
+                error(error,node) {
+                    console.log("访问用户媒体设备失败："+node, error.name, error.message);
+                },
+            },
+            mounted() {
+                this.startTasks(); // 开始了
+            },
+            beforeDestroy() {
+                if (this.timer) {
+                    clearInterval(this.timer);
+                    this.timer = null; // Add this line to set timer to null
+                }
+                if (this.stillTimer) {
+                    clearTimeout(this.stillTimer);
+                    this.stillTimer = null;
+                }
+                if (this.countdownTimer) {
+                    clearTimeout(this.countdownTimer);
+                    this.countdownTimer = null;
+                }
+                if (this.videoStream) {
+                    this.videoStream.getTracks().forEach((track) => track.stop());
+                }
+            },
+        });
+    </script>
+</body>
+</html>

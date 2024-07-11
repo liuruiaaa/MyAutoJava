@@ -1,0 +1,191 @@
+
+@media screen and (min-width: 320px) {
+    html {font-size: 14px;}
+}
+ 
+@media screen and (min-width: 360px) {
+    html {font-size: 16px;}
+}
+ 
+@media screen and (min-width: 400px) {
+    html {font-size: 18px;}
+}
+ 
+@media screen and (min-width: 440px) {
+    html {font-size: 20px;}
+}
+ 
+@media screen and (min-width: 480px) {
+    html {font-size: 22px;}
+}
+ 
+@media screen and (min-width: 640px) {
+    html {font-size: 28px;}
+}
+
+    .face-verify-approve-index {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+        position: relative;
+    }
+
+    .face-verify-approve-index .loading-wrap {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: #d9d9d9;
+        z-index: 99999;
+        display: flex; /* 使用Flex布局 */
+        justify-content: center; /* 水平居中 */
+        align-items: center; /* 垂直居中 */
+    }
+
+    .face-verify-approve-index .loading-wrap .loading {
+        width: 1.26rem;
+        height: 1.26rem;
+        background: #ffffff;
+        border-radius: 0.12rem;
+        z-index: 99999;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .face-verify-approve-index .loading-wrap .loading > img {
+        width: 0.44rem;
+        height: 0.44rem;
+        animation: rotate 1s linear infinite;
+    }
+
+    @keyframes rotate {
+        from {
+            transform: rotate(0deg);
+        }
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .face-verify-approve-index .loading-wrap .loading > p {
+        font-size: 0.16rem;
+        font-weight: bold;
+        color: #000000;
+        margin-top: 0.1rem;
+    }
+
+    .face-verify-approve-index .header {
+        background-color: #fff;
+        border-bottom: 1px solid #f6f7f8;
+        color: #000;
+    }
+
+    .face-verify-approve-index section {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        padding: 0.4rem 0.2rem;
+        box-sizing: border-box;
+    }
+
+    .face-verify-approve-index section .page {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .face-verify-approve-index section .page .title {
+        font-size: 1rem;
+        font-weight: bold;
+        color: #000000;
+        line-height: 0.22rem;
+        text-align: center;
+    }
+
+    .face-verify-approve-index section .page .video-page {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        margin-top: 0.24rem;
+        width: 232px;
+        height: 232px;
+        overflow: hidden;
+        border-radius: 232px;
+    }
+
+    .face-verify-approve-index section .page .video-page .circle-container {
+        width: 232px;
+        height: 232px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        overflow: hidden;
+    }
+
+    /* 请替换这段选择器以匹配你的框架或使用环境 */
+    /* 特别的深度选择器适用于特定的构建系统，例如Vue */
+    .circle-container > svg {
+        z-index: 11 !important;
+    }
+
+    .face-verify-approve-index section .page .video-page video {
+        width: 215px;
+        height: 215px;
+        border-radius: 50%;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        object-fit: cover; /* 保持视频比例，填满容器 */
+    }
+
+    .face-verify-approve-index section .page .video-page .flipped {
+        width: 215px;
+        height: 215px;
+        border-radius: 50%;
+        transform: translate(-50%, -50%);
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        object-fit: cover; /* 保持视频比例，填满容器 */
+        transform: scaleX(-1);
+    }
+
+    .face-verify-approve-index section .page .video-page .text {
+        position: absolute;
+        bottom: 0.07rem;
+        left: 50%;
+        transform: translate(-50%, 0);
+        width: 215px;
+        height: 68px;
+        background: rgba(0, 0, 0, 0.5);
+        font-size: 1rem;
+        color: #fff;
+        line-height: 0.18rem;
+        text-align: center;
+        padding: 0.16rem 0.35rem;
+        box-sizing: border-box;
+    }
+
+    .face-verify-approve-index section .page #cameraInput {
+        display: none;
+        font-size: 16px;
+    }
+
+    /* Style for the custom button */
+    .face-verify-approve-index section .page #openCameraButton {
+        padding: 10px;
+        background-color: #3498db;
+        color: #fff;
+        cursor: pointer;
+        font-size: 16px;
+    }

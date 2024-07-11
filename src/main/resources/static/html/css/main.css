@@ -1,0 +1,63 @@
+#app {
+    background-color: #FFFFFF;
+}
+
+.header {
+    display: flex;
+    align-items: center;
+    background-color: #545c64;
+    padding: 0 40px;
+}
+
+.el-menu {
+    flex-grow: 1;
+    border: none !important;
+}
+
+
+.el-dialog__title {
+    font-weight: bold;
+    color: #606266;
+    font-size: 16px;
+}
+
+.el-dialog__body {
+    max-height: 50vh;
+    overflow-y: auto;
+}
+
+.el-dialog__header {
+    border-bottom: 1px solid #dcdfe6;
+    padding: 10px 14px;
+}
+
+.el-dialog__footer {
+    border-top: 1px solid #dcdfe6;
+}
+.paramsDialog .paramsDialog-table .el-input__inner{
+    height: 32px;
+    line-height: 32px;
+}
+.breviaryText {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px;
+    transition: 0.3s;
+}
+.breviaryText .text{
+   width: 90%;
+}
+.breviaryText.hide .text{
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -webkit-line-clamp: 3;
+    height: auto;
+    line-height: inherit;
+}
+
+.el-message__icon {
+    display: none!important;
+}
