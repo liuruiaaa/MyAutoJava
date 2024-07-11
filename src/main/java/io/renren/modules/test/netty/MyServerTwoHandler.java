@@ -1,7 +1,6 @@
 package io.renren.modules.test.netty;
 
 import io.netty.channel.ChannelHandlerContext;
-import io.netty.channel.ChannelId;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
