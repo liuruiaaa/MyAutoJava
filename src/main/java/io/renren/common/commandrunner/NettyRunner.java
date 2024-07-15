@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor(onConstructor = @__(@Autowired))
 public class NettyRunner implements CommandLineRunner {
-    private final MyServer myServer;
+   // private final MyServer myServer;
     /**
      * @param args
      * @throws Exception
