@@ -12,9 +12,9 @@ package io.renren.modules.test.controller;
 import io.renren.common.utils.PageUtils;
 import io.renren.common.utils.R;
 import io.renren.modules.sys.service.SysLogService;
+import io.renren.modules.test.service.PushMsgService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
-import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
@@ -31,6 +31,8 @@ import java.util.Map;
 public class TestController {
     @Autowired
     private SysLogService sysLogService;
+    @Autowired
+    private PushMsgService pushMsgService;
     /**
      * 登录
      */
@@ -56,4 +58,27 @@ public class TestController {
         //PageUtils page = sysLogService.queryPage(params);
         return R.ok().put("page", params);
     }
+
+
+
+    /**
+     * 推送消息到具体客户端
+     * @param uid
+     */
+    @GetMapping("/{uid}")
+    @ApiOperation("推送消息到具体客户端")
+    public void pushOne(@PathVariable String uid) {
+        pushMsgService.pushMsgToOne(uid, "hello-------------------------");
+    }
+
+
+    /**
+     * 推送消息到所有客户端
+     */
+    @GetMapping("/pushAll")
+    @ApiOperation("推送消息到所有客户端")
+    public void pushAll() {
+        pushMsgService.pushMsgToAll("hello all-------------------------");
+    }
+
 }

@@ -1,7 +1,6 @@
 package io.renren.common.commandrunner;
 
 
-import io.renren.modules.test.netty.MyServer;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +18,6 @@ public class NettyRunner implements CommandLineRunner {
      */
     @Override
     public void run(String... args) throws Exception {
-        myServer.start();
+      //  myServer.start();
     }
 }
